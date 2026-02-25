@@ -92,6 +92,17 @@ let update = (entities, entity, time, delta) => {
             dataSystem.load('payed')
         ) ? entities.game.levels.wm : entities.game.levels.sequence;
         let puzzleId = sequence[entities.game.levels.current];
+        
+        // Analytics: Start tracking level
+        window.currentLevelId = 'level_' + entities.game.levels.current + '_' + puzzleId;
+        window.levelStartTime = Date.now();
+        if (window.analytics) {
+            window.analytics.startLevel(window.currentLevelId);
+            window.analytics.addRawMetric('puzzle_name', puzzleId);
+            window.analytics.addRawMetric('level_number', entities.game.levels.current);
+            window.analytics.addRawMetric('max_moves', entity.puzzle.taps || 0);
+        }
+        
         entities.titletext.text.text = (entity.puzzle.taps)
             ? 'The ' + puzzleId
             : '';
@@ -412,6 +423,21 @@ let update = (entities, entity, time, delta) => {
                 if (nChanges > 0) {
                     solution.push(i);
                     soundSystem.playSong(tapSounds[move]);
+                    
+                    // Analytics: Track each move
+                    if (window.analytics && window.currentLevelId) {
+                        const moveTime = Date.now() - window.levelStartTime;
+                        window.analytics.recordTask(
+                            window.currentLevelId,
+                            'move_' + solution.length,
+                            'Move #' + solution.length + ': ' + move + ' at position ' + i,
+                            'successful',
+                            'successful',
+                            moveTime,
+                            5
+                        );
+                        window.analytics.addRawMetric('moves_made', solution.length);
+                    }
                 } else {
                     soundSystem.playSong(dabSounds[move]);
                 }
@@ -444,6 +470,25 @@ let update = (entities, entity, time, delta) => {
                         solutions[puzzleId].push(jsonSolution);
                         dataSystem.save('solutions', solutions);
                     }
+                    
+                    // Analytics: Track victory
+                    if (window.analytics && window.currentLevelId) {
+                        const timeTaken = Date.now() - window.levelStartTime;
+                        const maxMoves = entity.puzzle.taps || 0;
+                        const movesUsed = solution.length;
+                        
+                        // Calculate XP with bonuses
+                        const baseXP = 100;
+                        const moveBonus = maxMoves > 0 ? Math.max(0, (maxMoves - movesUsed) * 10) : 0;
+                        const timeBonus = Math.max(0, 50 - Math.floor(timeTaken / 5000));
+                        const totalXP = baseXP + moveBonus + timeBonus;
+                        
+                        window.analytics.addRawMetric('victory', true);
+                        window.analytics.addRawMetric('moves_remaining', tapsLeft);
+                        window.analytics.addRawMetric('time_seconds', (timeTaken / 1000).toFixed(2));
+                        window.analytics.endLevel(window.currentLevelId, true, timeTaken, totalXP);
+                        window.analytics.submitReport();
+                    }
                 // check game over based on no taps left
                 } else if (tapsLeft <= 0) {
                     swipedRight = true;
@@ -451,6 +496,16 @@ let update = (entities, entity, time, delta) => {
                     swiped = true;
                     soundSystem.playSong(failSound);
                     entities.feedback.text.text = 'Out of moves!';
+                    
+                    // Analytics: Track failure - out of moves
+                    if (window.analytics && window.currentLevelId) {
+                        const timeTaken = Date.now() - window.levelStartTime;
+                        window.analytics.addRawMetric('victory', false);
+                        window.analytics.addRawMetric('failure_reason', 'out_of_moves');
+                        window.analytics.addRawMetric('time_seconds', (timeTaken / 1000).toFixed(2));
+                        window.analytics.endLevel(window.currentLevelId, false, timeTaken, 0);
+                        window.analytics.submitReport();
+                    }
                 // check for game over based on no clickables left
                 } else if (!entity.puzzle.grid.some((e, i) => clickables.some(
                     prop => entities['piece' + i][prop] !== undefined
@@ -461,6 +516,16 @@ let update = (entities, entity, time, delta) => {
                     swiped = true;
                     soundSystem.playSong(failSound);
                     entities.feedback.text.text = 'Not clean...';
+                    
+                    // Analytics: Track failure - no clickables
+                    if (window.analytics && window.currentLevelId) {
+                        const timeTaken = Date.now() - window.levelStartTime;
+                        window.analytics.addRawMetric('victory', false);
+                        window.analytics.addRawMetric('failure_reason', 'not_clean');
+                        window.analytics.addRawMetric('time_seconds', (timeTaken / 1000).toFixed(2));
+                        window.analytics.endLevel(window.currentLevelId, false, timeTaken, 0);
+                        window.analytics.submitReport();
+                    }
                 // check for game over based on stuck
                 } else {
                     i = 0;
@@ -483,6 +548,16 @@ let update = (entities, entity, time, delta) => {
                         swiped = true;
                         soundSystem.playSong(failSound);
                         entities.feedback.text.text = 'Stuck';
+                        
+                        // Analytics: Track failure - stuck
+                        if (window.analytics && window.currentLevelId) {
+                            const timeTaken = Date.now() - window.levelStartTime;
+                            window.analytics.addRawMetric('victory', false);
+                            window.analytics.addRawMetric('failure_reason', 'stuck');
+                            window.analytics.addRawMetric('time_seconds', (timeTaken / 1000).toFixed(2));
+                            window.analytics.endLevel(window.currentLevelId, false, timeTaken, 0);
+                            window.analytics.submitReport();
+                        }
                     }
                 }
             }
