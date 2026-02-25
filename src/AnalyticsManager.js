@@ -48,10 +48,10 @@ class AnalyticsManager {
   initialize(gameId, sessionName) {
     this._gameId = gameId;
     this._sessionName = sessionName;
-    // Generate sessionId with timestamp and random component
+    // Generate sessionId with timestamp and random component (format: session_TIMESTAMP_RANDOM)
     const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 9);
-    this._sessionId = `${timestamp}-0.${random}`;
+    const random = Math.random().toString(36).substring(2, 11);
+    this._sessionId = `session_${timestamp}_${random}`;
     
     this._reportData.gameId = gameId;
     this._reportData.name = sessionName;
@@ -189,16 +189,19 @@ class AnalyticsManager {
       return;
     }
     
-    // Build canonical payload with only required fields
+    // Build canonical payload with all required fields matching PAYLOAD_FORMAT.md
     const payload = {
       gameId: this._reportData.gameId,
-      name: this._reportData.name,
       sessionId: this._reportData.sessionId,
       timestamp: new Date().toISOString(),
+      name: this._reportData.name,
       xpEarnedTotal: this._reportData.xpEarnedTotal,
       xpEarned: this._reportData.xpEarned,
       xpTotal: this._reportData.xpTotal,
       bestXp: this._reportData.bestXp,
+      lastPlayedLevel: this._reportData.lastPlayedLevel,
+      highestLevelPlayed: this._reportData.highestLevelPlayed,
+      perLevelAnalytics: this._reportData.perLevelAnalytics,
       rawData: this._reportData.rawData,
       diagnostics: {
         levels: this._reportData.diagnostics.levels
@@ -212,8 +215,12 @@ class AnalyticsManager {
     console.log('═══════════════════════════════════════════════════════');
     console.log('Game ID:', payload.gameId);
     console.log('Session:', payload.name);
+    console.log('Session ID:', payload.sessionId);
     console.log('Total XP:', payload.xpEarnedTotal);
+    console.log('Last Played Level:', payload.lastPlayedLevel);
+    console.log('Highest Level Played:', payload.highestLevelPlayed);
     console.log('Levels Completed:', payload.diagnostics.levels.length);
+    console.log('Per-Level Analytics:', payload.perLevelAnalytics);
     console.log('Raw Metrics:', payload.rawData);
     console.log('Full Payload:', payload);
     console.log('═══════════════════════════════════════════════════════');
@@ -304,16 +311,19 @@ class AnalyticsManager {
    * @returns {Object} Current analytics data
    */
   getReportData() {
-    // Return same format as submitReport
+    // Return same format as submitReport - matching PAYLOAD_FORMAT.md
     return {
       gameId: this._reportData.gameId,
-      name: this._reportData.name,
       sessionId: this._reportData.sessionId,
       timestamp: new Date().toISOString(),
+      name: this._reportData.name,
       xpEarnedTotal: this._reportData.xpEarnedTotal,
       xpEarned: this._reportData.xpEarned,
       xpTotal: this._reportData.xpTotal,
       bestXp: this._reportData.bestXp,
+      lastPlayedLevel: this._reportData.lastPlayedLevel,
+      highestLevelPlayed: this._reportData.highestLevelPlayed,
+      perLevelAnalytics: JSON.parse(JSON.stringify(this._reportData.perLevelAnalytics)),
       rawData: JSON.parse(JSON.stringify(this._reportData.rawData)),
       diagnostics: {
         levels: JSON.parse(JSON.stringify(this._reportData.diagnostics.levels))
