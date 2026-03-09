@@ -10,20 +10,12 @@ class AnalyticsManager {
     this._isInitialized = false;
     this._gameId = '';
     this._sessionName = '';
-    this._sessionId = '';
     
     this._reportData = {
       gameId: '',
-      sessionId: '',
-      timestamp: '',
       name: '',
       xpEarnedTotal: 0,
-      xpEarned: 0,
-      xpTotal: 0,
-      bestXp: 0,
-      lastPlayedLevel: '',
-      highestLevelPlayed: '',
-      perLevelAnalytics: {},
+      highestLevelPlayed: 0,
       rawData: [],
       diagnostics: {
         levels: []
@@ -48,20 +40,13 @@ class AnalyticsManager {
   initialize(gameId, sessionName) {
     this._gameId = gameId;
     this._sessionName = sessionName;
-    this._sessionId = sessionName; // Use sessionName as sessionId
     
     this._reportData.gameId = gameId;
-    this._reportData.sessionId = sessionName;
     this._reportData.name = sessionName;
+    this._reportData.highestLevelPlayed = 0;
     this._reportData.diagnostics.levels = [];
     this._reportData.rawData = [];
-    this._reportData.perLevelAnalytics = {};
     this._reportData.xpEarnedTotal = 0;
-    this._reportData.xpEarned = 0;
-    this._reportData.xpTotal = 0;
-    this._reportData.bestXp = 0;
-    this._reportData.lastPlayedLevel = '';
-    this._reportData.highestLevelPlayed = '';
     
     this._isInitialized = true;
     console.log(`[Analytics] Initialized for: ${gameId}`);
@@ -83,7 +68,7 @@ class AnalyticsManager {
   
   /**
    * Start tracking a new level
-   * @param {string} levelId - Unique level identifier
+   * @param {string|number} levelId - Unique level identifier
    */
   startLevel(levelId) {
     if (!this._isInitialized) {
@@ -91,8 +76,11 @@ class AnalyticsManager {
       return;
     }
     
+    // Normalize to string to allow matching 1 vs '1'
+    const idString = String(levelId);
+
     const levelEntry = {
-      levelId,
+      levelId: idString,
       successful: false,
       timeTaken: 0,
       timeDirection: false,
@@ -101,29 +89,18 @@ class AnalyticsManager {
     };
     
     this._reportData.diagnostics.levels.push(levelEntry);
+    this._updateHighestLevel(idString);
   }
   
   /**
    * Complete a level and update totals
-   * @param {string} levelId - Level identifier
+   * @param {string|number} levelId - Level identifier
    * @param {boolean} successful - Whether level was completed successfully
    * @param {number} timeTakenMs - Time taken in milliseconds
    * @param {number} xp - XP earned for this level
    */
   endLevel(levelId, successful, timeTakenMs, xp) {
-    const level = this._getLevelById(levelId);
-      this._reportData.xpEarned = this._reportData.xpEarnedTotal;
-      this._reportData.xpTotal = this._reportData.xpEarnedTotal;
-      this._reportData.bestXp = this._reportData.xpEarnedTotal;
-      
-      // Update last played level
-      this._reportData.lastPlayedLevel = levelId;
-      
-      // Update highest level played (compare level numbers)
-      this._updateHighestLevel(levelId);
-      
-      // Update per-level analytics
-      this._updatePerLevelAnalytics(levelId, successful, timeTakenMs, xp);
+    const level = this._getLevelById(String(levelId));
     
     if (level) {
       level.successful = successful;
@@ -139,7 +116,7 @@ class AnalyticsManager {
   
   /**
    * Record a specific user action/task within a level
-   * @param {string} levelId - Level identifier
+   * @param {string|number} levelId - Level identifier
    * @param {string} taskId - Task identifier
    * @param {string} question - Question text
    * @param {string} correctChoice - Correct answer
@@ -148,7 +125,7 @@ class AnalyticsManager {
    * @param {number} xp - XP earned for this task
    */
   recordTask(levelId, taskId, question, correctChoice, choiceMade, timeMs, xp) {
-    const level = this._getLevelById(levelId);
+    const level = this._getLevelById(String(levelId));
     
     if (level) {
       const isSuccessful = (correctChoice === choiceMade);
@@ -179,8 +156,13 @@ class AnalyticsManager {
     }
     // Build canonical payload
     const payload = JSON.parse(JSON.stringify(this._reportData));
-    // Add timestamp
-    payload.timestamp = new Date().toISOString();
+    // ensure canonical fields expected by hosts
+    if (!payload.sessionId) payload.sessionId = (Date.now() + '-' + Math.random().toString(36));
+    if (!payload.timestamp) payload.timestamp = new Date().toISOString();
+    // map existing fields to common names
+    payload.xpEarned = payload.xpEarned || payload.xpEarnedTotal || 0;
+    payload.xpTotal = payload.xpTotal || payload.xpEarnedTotal || 0;
+    payload.bestXp = payload.bestXp || payload.xpEarnedTotal || 0;
 
     // Try delivery via several bridges, best-effort. If window is not present (test/node), just return payload
     if (typeof window === 'undefined') {
@@ -276,18 +258,34 @@ class AnalyticsManager {
    */
   reset() {
     this._reportData.xpEarnedTotal = 0;
-    this._reportData.xpEarned = 0;
-    this._reportData.xpTotal = 0;
-    this._reportData.bestXp = 0;
+    this._reportData.highestLevelPlayed = 0;
     this._reportData.rawData = [];
     this._reportData.diagnostics.levels = [];
-    this._reportData.perLevelAnalytics = {};
-    this._reportData.lastPlayedLevel = '';
-    this._reportData.highestLevelPlayed = '';
     console.log('[Analytics] Data reset');
   }
   
   // --- Internal Helpers ---
+  
+  /**
+   * Update highest level reached based on numeric value in level ID
+   * @private
+   * @param {string|number} levelId
+   */
+  _updateHighestLevel(levelId) {
+    // Check if levelId is a valid number
+    const num = parseFloat(levelId);
+    const isNumeric = !isNaN(num) && isFinite(num);
+
+    if (isNumeric) {
+      const current = this._reportData.highestLevelPlayed;
+      if (num > current) {
+        this._reportData.highestLevelPlayed = num;
+      }
+    } else {
+      // If any non-numeric level is encountered, reset to 0
+      this._reportData.highestLevelPlayed = 0;
+    }
+  }
   
   /**
    * Find level by ID (searches backwards for most recent)
@@ -304,84 +302,6 @@ class AnalyticsManager {
     }
     return null;
   }
-  
-  /**
-   * Update per-level analytics aggregates
-   * @private
-   * @param {string} levelId
-   * @param {boolean} successful
-   * @param {number} timeTakenMs
-   * @param {number} xp
-   */
-  _updatePerLevelAnalytics(levelId, successful, timeTakenMs, xp) {
-    if (!this._reportData.perLevelAnalytics[levelId]) {
-      this._reportData.perLevelAnalytics[levelId] = {
-        attempts: 0,
-        wins: 0,
-        losses: 0,
-        totalTimeMs: 0,
-        bestTimeMs: Infinity,
-        totalXp: 0,
-        averageTimeMs: 0
-      };
-    }
-    
-    const stats = this._reportData.perLevelAnalytics[levelId];
-    stats.attempts += 1;
-    
-    if (successful) {
-      stats.wins += 1;
-      stats.totalXp += xp;
-      // Track best time only for successful attempts
-      if (timeTakenMs < stats.bestTimeMs) {
-        stats.bestTimeMs = timeTakenMs;
-      }
-    } else {
-      stats.losses += 1;
-    }
-    
-    stats.totalTimeMs += timeTakenMs;
-    stats.averageTimeMs = Math.round(stats.totalTimeMs / stats.attempts);
-    
-    // If no successful attempts yet, set bestTimeMs to 0
-    if (stats.bestTimeMs === Infinity) {
-      stats.bestTimeMs = 0;
-    }
-  }
-  
-  /**
-   * Update the highest level played based on level ID
-   * @private
-   * @param {string} levelId
-   */
-  _updateHighestLevel(levelId) {
-    // Extract level number from levelId (e.g., "campaign_level_3" -> 3)
-    const currentLevelNum = this._extractLevelNumber(levelId);
-    const highestLevelNum = this._extractLevelNumber(this._reportData.highestLevelPlayed);
-    
-    if (currentLevelNum > highestLevelNum) {
-      this._reportData.highestLevelPlayed = levelId;
-    }
-  }
-  
-  /**
-   * Extract numeric level from levelId
-   * @private
-   * @param {string} levelId
-   * @returns {number}
-   */
-  _extractLevelNumber(levelId) {
-    if (!levelId) return 0;
-    
-    // Match patterns like "campaign_level_3" -> 3
-    const match = levelId.match(/level_(\d+)$/);
-    if (match) {
-      return parseInt(match[1], 10);
-    }
-    
-    // For reflex mode or other modes, return 0
-    return 0;
-  }
 }
 
-export default AnalyticsManager;
+export { AnalyticsManager as default };

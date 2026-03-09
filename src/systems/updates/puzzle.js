@@ -249,6 +249,21 @@ let update = (entities, entity, time, delta) => {
                 Math.abs(homeX - game.canvas.oX)
                 < 1 / entities.game.canvas.zoom
             ) {
+                // Analytics: Track level abandonment if in progress
+                if (window.analytics && window.currentLevelId && window.levelStartTime > 0 && solution.length > 0) {
+                    const timeTaken = Date.now() - window.levelStartTime;
+                    const level = window.analytics._getLevelById(window.currentLevelId);
+                    // Only track if level hasn't been marked as complete yet
+                    if (level && !level.successful && level.xpEarned === 0) {
+                        const abandonReason = swipedLeft ? 'skipped' : 'reset';
+                        window.analytics.addRawMetric('victory', false);
+                        window.analytics.addRawMetric('failure_reason', abandonReason);
+                        window.analytics.addRawMetric('time_seconds', (timeTaken / 1000).toFixed(2));
+                        window.analytics.endLevel(window.currentLevelId, false, timeTaken, 0);
+                        // Don't submit yet - wait for the session to accumulate more data
+                    }
+                }
+                
                 let levels = entities.game.levels;
                 let sequence = (
                     dataSystem.load('payed')
