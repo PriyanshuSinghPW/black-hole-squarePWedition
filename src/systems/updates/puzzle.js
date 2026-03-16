@@ -503,6 +503,33 @@ let update = (entities, entity, time, delta) => {
                         window.analytics.addRawMetric('time_seconds', (timeTaken / 1000).toFixed(2));
                         window.analytics.endLevel(window.currentLevelId, true, timeTaken, totalXP);
                         window.analytics.submitReport();
+                        
+                        // Progress Manager: Track level completion
+                        if (window.progressManager && window.progressManager.initialized) {
+                            const currentLevelIndex = entities.game.levels.current;
+                            window.progressManager.handleLevelComplete(currentLevelIndex, {
+                                xp: totalXP,
+                                timeTaken: timeTaken,
+                                moves: movesUsed,
+                                successful: true
+                            }).then(() => {
+                                console.log('[Progress] Level completion saved');
+                                
+                                // Get updated progress payload
+                                const progressPayload = window.progressManager.getProgressPayload();
+                                console.log('[Progress] Current progress:', progressPayload);
+                                
+                                // Send progress update to backend/wrapper if available
+                                if (window.ReactNativeWebView) {
+                                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                                        type: 'PROGRESS_UPDATE',
+                                        payload: progressPayload
+                                    }));
+                                }
+                            }).catch(error => {
+                                console.error('[Progress] Failed to save level completion:', error);
+                            });
+                        }
                     }
                 // check game over based on no taps left
                 } else if (tapsLeft <= 0) {
