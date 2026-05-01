@@ -75,7 +75,7 @@ class AnalyticsManager {
       xpTotal: 0,
       bestXp: 0,
       lastPlayedLevel: '',
-      highestLevelPlayed: '',
+      highestLevelPlayed: 0,
       perLevelAnalytics: {},
       rawData: [],
       diagnostics: {
@@ -117,7 +117,7 @@ class AnalyticsManager {
     this._reportData.xpTotal = 0;
     this._reportData.bestXp = 0;
     this._reportData.lastPlayedLevel = '';
-    this._reportData.highestLevelPlayed = '';
+    this._reportData.highestLevelPlayed = 0;
     
     this._isInitialized = true;
     console.log(`[Analytics] Initialized for: ${gameId}`);
@@ -451,7 +451,7 @@ class AnalyticsManager {
     this._reportData.diagnostics.levels = [];
     this._reportData.perLevelAnalytics = {};
     this._reportData.lastPlayedLevel = '';
-    this._reportData.highestLevelPlayed = '';
+    this._reportData.highestLevelPlayed = 0;
     console.log('[Analytics] Data reset');
   }
   
@@ -592,10 +592,12 @@ class AnalyticsManager {
   _updateHighestLevel(levelId) {
     // Extract level number from levelId (e.g., "campaign_level_3" -> 3)
     const currentLevelNum = this._extractLevelNumber(levelId);
-    const highestLevelNum = this._extractLevelNumber(this._reportData.highestLevelPlayed);
+    const highestLevelNum = typeof this._reportData.highestLevelPlayed === 'number'
+      ? this._reportData.highestLevelPlayed
+      : this._extractLevelNumber(this._reportData.highestLevelPlayed);
     
     if (currentLevelNum > highestLevelNum) {
-      this._reportData.highestLevelPlayed = levelId;
+      this._reportData.highestLevelPlayed = currentLevelNum;
     }
   }
   
