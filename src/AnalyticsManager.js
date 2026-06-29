@@ -306,7 +306,13 @@ class AnalyticsManager {
       xpEarnedTotal: this._reportData.xpEarnedTotal,
       xpEarned: this._reportData.xpEarned,
       xpTotal: this._reportData.xpTotal,
-      bestXp: this._reportData.bestXp,
+      bestXp: (() => {
+        const _key = 'bestXp_' + (this._reportData.gameId || '');
+        let _prev = 0; try { _prev = parseInt(localStorage.getItem(_key) || '0', 10) || 0; } catch (_e) {}
+        const _cur = this._reportData.xpEarnedTotal || 0;
+        if (_cur > _prev) { try { localStorage.setItem(_key, String(_cur)); } catch (_e) {} }
+        return Math.max(_cur, _prev);
+      })(),
       lastPlayedLevel: this._reportData.lastPlayedLevel,
       highestLevelPlayed: this._reportData.highestLevelPlayed,
       perLevelAnalytics: this._reportData.perLevelAnalytics,
@@ -428,7 +434,13 @@ class AnalyticsManager {
       xpEarnedTotal: this._reportData.xpEarnedTotal,
       xpEarned: this._reportData.xpEarned,
       xpTotal: this._reportData.xpTotal,
-      bestXp: this._reportData.bestXp,
+      bestXp: (() => {
+        const _key = 'bestXp_' + (this._reportData.gameId || '');
+        let _prev = 0; try { _prev = parseInt(localStorage.getItem(_key) || '0', 10) || 0; } catch (_e) {}
+        const _cur = this._reportData.xpEarnedTotal || 0;
+        if (_cur > _prev) { try { localStorage.setItem(_key, String(_cur)); } catch (_e) {} }
+        return Math.max(_cur, _prev);
+      })(),
       lastPlayedLevel: this._reportData.lastPlayedLevel,
       highestLevelPlayed: this._reportData.highestLevelPlayed,
       perLevelAnalytics: JSON.parse(JSON.stringify(this._reportData.perLevelAnalytics)),
